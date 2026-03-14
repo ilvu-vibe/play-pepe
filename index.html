@@ -66,6 +66,88 @@
     letter-spacing: 1px;
     white-space: nowrap;
   }
+  #name-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    background: rgba(0,0,0,0.65);
+  }
+  #name-overlay.active { display: flex; }
+  #name-box {
+    background: linear-gradient(160deg, #0d1b2a, #0a1520);
+    border: 2px solid #4ade80;
+    border-radius: 14px;
+    padding: 26px 34px 22px;
+    text-align: center;
+    box-shadow: 0 0 40px #4ade8044;
+    min-width: 270px;
+    max-width: 320px;
+    width: 90vw;
+  }
+  #name-box h2 {
+    color: #4ade80;
+    font-size: 13px;
+    letter-spacing: 3px;
+    margin: 0 0 14px;
+    font-family: 'Arial Black', Arial, sans-serif;
+  }
+  #name-input {
+    background: #0a1020;
+    border: 2px solid #4ade80;
+    border-radius: 6px;
+    color: #fde047;
+    font-family: 'Arial Black', Arial, sans-serif;
+    font-size: 22px;
+    padding: 8px 10px;
+    text-align: center;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  #name-input::placeholder { color: #2d4a3e; }
+  #name-btn {
+    margin-top: 12px;
+    background: #4ade80;
+    border: none;
+    border-radius: 7px;
+    color: #052e16;
+    font-family: 'Arial Black', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: bold;
+    padding: 10px 0;
+    cursor: pointer;
+    letter-spacing: 2px;
+    width: 100%;
+    display: block;
+  }
+  #name-btn:hover { background: #86efac; }
+  #name-lb { margin-top: 14px; }
+  #name-lb h3 {
+    color: #94a3b8;
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin: 0 0 6px;
+    font-family: Arial, sans-serif;
+  }
+  .lb-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    gap: 8px;
+    font-family: Arial, sans-serif;
+  }
+  .lb-rank  { color: #475569; font-size: 11px; width: 16px; text-align: right; flex-shrink: 0; }
+  .lb-name  { color: #e2e8f0; font-size: 12px; flex: 1; letter-spacing: 1px; text-transform: uppercase; text-align: left; }
+  .lb-score { color: #fde047; font-size: 12px; font-weight: bold; flex-shrink: 0; }
+  .lb-row.lb-me .lb-name  { color: #4ade80; }
+  .lb-row.lb-me .lb-score { color: #4ade80; }
+  #lb-loading { color: #475569; font-size: 11px; font-family: Arial, sans-serif; letter-spacing: 1px; }
 </style>
 </head>
 <body>
@@ -78,6 +160,17 @@
   </div>
   <div id="kb-hint">SPACE/↑ Jump &nbsp;|&nbsp; ↓/S Slide &nbsp;|&nbsp; A Cry</div>
 </div>
+
+<div id="name-overlay">
+  <div id="name-box">
+    <h2>SIGN IN TO PLAY</h2>
+    <input id="name-input" type="text" maxlength="12" placeholder="YOUR NAME" autocomplete="off" spellcheck="false">
+    <button id="name-btn">▶ PLAY!</button>
+    <div id="name-lb"><span id="lb-loading">LOADING SCORES...</span></div>
+  </div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
 // ─── CANVAS SETUP ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -141,6 +234,76 @@ const BALL_INTERVAL     = [160, 260];
 const OPPONENT_INTERVAL = [200, 320];
 const REFEREE_INTERVAL  = [500, 800];
 
+// ─── FIREBASE + LEADERBOARD ──────────────────────────────────────────────────
+firebase.initializeApp({
+  apiKey:            "AIzaSyBS2nsAMkaEEcrj-emGUvVjiDvwa24QqDA",
+  authDomain:        "play-pepe.firebaseapp.com",
+  databaseURL:       "https://play-pepe-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "play-pepe",
+  storageBucket:     "play-pepe.firebasestorage.app",
+  messagingSenderId: "921799521717",
+  appId:             "1:921799521717:web:ec2c18a715a8db7d5cd5fc"
+});
+const db = firebase.database();
+
+let playerName = localStorage.getItem('pepe_player') || '';
+
+async function saveScore(name, score) {
+  if (!name || !name.trim() || score <= 0) return;
+  try {
+    await db.ref('scores').push({ name: name.toUpperCase().trim(), score, ts: Date.now() });
+  } catch(e) { console.warn('Score save failed:', e); }
+}
+
+async function loadTopScores(n = 10) {
+  try {
+    const snap = await db.ref('scores').orderByChild('score').limitToLast(n).get();
+    const entries = [];
+    snap.forEach(child => entries.push(child.val()));
+    return entries.sort((a, b) => b.score - a.score);
+  } catch(e) { console.warn('Leaderboard load failed:', e); return []; }
+}
+
+function renderLBInOverlay(scores) {
+  const lbDiv = document.getElementById('name-lb');
+  if (!scores.length) { lbDiv.innerHTML = ''; return; }
+  const myName = playerName.toUpperCase().trim();
+  lbDiv.innerHTML = '<h3>TOP SCORES</h3>' + scores.map((e, i) => {
+    const isMe = myName && e.name === myName;
+    return `<div class="lb-row${isMe ? ' lb-me' : ''}">
+      <span class="lb-rank">${i + 1}</span>
+      <span class="lb-name">${e.name}</span>
+      <span class="lb-score">${e.score}</span>
+    </div>`;
+  }).join('');
+}
+
+function showNameOverlay() {
+  const overlay = document.getElementById('name-overlay');
+  const input   = document.getElementById('name-input');
+  overlay.classList.add('active');
+  input.value = playerName;
+  input.focus(); input.select();
+  document.getElementById('name-lb').innerHTML = '<span id="lb-loading">LOADING SCORES...</span>';
+  loadTopScores().then(renderLBInOverlay);
+}
+
+function hideNameOverlay() {
+  document.getElementById('name-overlay').classList.remove('active');
+}
+
+function startGame() {
+  const raw = document.getElementById('name-input').value.trim().toUpperCase();
+  playerName = raw || 'PLAYER';
+  localStorage.setItem('pepe_player', playerName);
+  hideNameOverlay();
+  startGameDirectly();
+}
+
+function startGameDirectly() {
+  ensureAudio(); musicStop(); state.reset(); state.mode = 'playing'; musicStart();
+}
+
 // ─── AUDIO ───────────────────────────────────────────────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx;
@@ -166,14 +329,34 @@ function sfxScore()  { [600,800,1000].forEach((f,i) => setTimeout(() => beep(f,0
 function sfxDie()    { [400,300,200,100].forEach((f,i) => setTimeout(() => beep(f,0.15,'sawtooth',0.2), i*80)); }
 function sfxSpread() { beep(440, 0.1, 'sine', 0.18); beep(550, 0.1, 'sine', 0.15); }
 function sfxRef()    { beep(880, 0.08, 'square', 0.2); setTimeout(() => beep(880, 0.08, 'square', 0.2), 130); }
+function sfxName() {
+  if (!window.speechSynthesis || !playerName) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(playerName);
+  u.lang = 'fi-FI'; u.rate = 0.9;
+  const setVoice = () => {
+    const fi = speechSynthesis.getVoices().filter(v => v.lang.startsWith('fi'));
+    const male = fi.find(v => /harri/i.test(v.name))
+              || fi.find(v => !/heidi|female/i.test(v.name))
+              || fi[0];
+    if (male) u.voice = male;
+    speechSynthesis.speak(u);
+  };
+  speechSynthesis.getVoices().length ? setVoice() : (speechSynthesis.onvoiceschanged = setVoice);
+}
+
 function sfxFinnish() {
   if (!window.speechSynthesis) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance('Pepe, kaikkien aikojen EM-kisapelaaja.');
   u.lang = 'fi-FI'; u.rate = 0.9;
   const setVoice = () => {
-    const fi = speechSynthesis.getVoices().find(v => v.lang.startsWith('fi'));
-    if (fi) u.voice = fi;
+    const fi = speechSynthesis.getVoices().filter(v => v.lang.startsWith('fi'));
+    // prefer male voice — on Windows "Harri", filter out known female names as fallback
+    const male = fi.find(v => /harri/i.test(v.name))
+              || fi.find(v => !/heidi|female/i.test(v.name))
+              || fi[0];
+    if (male) u.voice = male;
     speechSynthesis.speak(u);
   };
   speechSynthesis.getVoices().length ? setVoice() : (speechSynthesis.onvoiceschanged = setVoice);
@@ -907,9 +1090,16 @@ const state = {
   nextBall: 0, nextOpponent: 0, nextReferee: 0,
   balls: [], opponents: [], referees: [], particles: [], scoreTexts: [],
   speed: SCROLL_SPEED,
+  leaderboardCache: [],
+  lastMilestone: 0,
+
+  checkMilestone() {
+    const m = Math.floor(this.score / 500);
+    if (m > this.lastMilestone) { this.lastMilestone = m; sfxName(); }
+  },
 
   reset() {
-    this.score = 0; this.lives = 3; this.frame = 0;
+    this.score = 0; this.lives = 3; this.frame = 0; this.lastMilestone = 0;
     this.nextBall     = randInt(...BALL_INTERVAL);
     this.nextOpponent = randInt(...OPPONENT_INTERVAL);
     this.nextReferee  = randInt(...REFEREE_INTERVAL);
@@ -925,13 +1115,19 @@ const state = {
     this.score += pts;
     if (this.score > this.hiScore) { this.hiScore=this.score; localStorage.setItem('pepe_hi',this.hiScore); }
     this.scoreTexts.push(new ScoreText(x, y, label)); sfxScore();
+    this.checkMilestone();
   },
 
   takeDamage() {
     if (player.invincible > 0) return;
     this.lives--; player.invincible = 120; sfxHit();
     for (let i=0; i<12; i++) this.particles.push(new Particle(player.x+16, player.y-24, '#ef4444'));
-    if (this.lives <= 0) { musicStop(); sfxDie(); this.mode='gameover'; sfxFinnish(); }
+    if (this.lives <= 0) {
+      musicStop(); sfxDie(); this.mode='gameover'; sfxFinnish();
+      saveScore(playerName, this.score);
+      this.leaderboardCache = [];
+      loadTopScores().then(scores => { state.leaderboardCache = scores; });
+    }
     else { this.mode='dead'; setTimeout(() => { if(this.mode==='dead') this.mode='playing'; }, 800); }
   }
 };
@@ -939,10 +1135,15 @@ const state = {
 // ─── INPUT ───────────────────────────────────────────────────────────────────
 const keys = {};
 document.addEventListener('keydown', e => {
+  if (document.getElementById('name-overlay').classList.contains('active')) return;
   if (keys[e.code]) return;
   keys[e.code] = true; ensureAudio();
-  if (state.mode==='title'||state.mode==='gameover') {
-    if (['Space','Enter','ArrowUp'].includes(e.code)) { musicStop(); state.reset(); state.mode='playing'; musicStart(); }
+  if (state.mode==='title') {
+    if (['Space','Enter','ArrowUp'].includes(e.code)) { showNameOverlay(); }
+    return;
+  }
+  if (state.mode==='gameover') {
+    if (['Space','Enter','ArrowUp'].includes(e.code)) { playerName ? startGameDirectly() : showNameOverlay(); }
     return;
   }
   if (state.mode !== 'playing') return;
@@ -951,24 +1152,29 @@ document.addEventListener('keydown', e => {
   if (['KeyA'].includes(e.code))                      player.spread();
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
+function _handleMenuTap() {
+  if (state.mode==='title')    { showNameOverlay(); return true; }
+  if (state.mode==='gameover') { playerName ? startGameDirectly() : showNameOverlay(); return true; }
+  return false;
+}
 canvas.addEventListener('pointerdown', e => {
   e.preventDefault(); ensureAudio();
-  if (state.mode==='title'||state.mode==='gameover') { musicStop(); state.reset(); state.mode='playing'; musicStart(); return; }
+  if (_handleMenuTap()) return;
   if (state.mode==='playing') player.jump();
 });
 document.getElementById('btn-jump').addEventListener('pointerdown', e => {
   e.preventDefault(); ensureAudio();
-  if (state.mode==='title'||state.mode==='gameover') { musicStop(); state.reset(); state.mode='playing'; musicStart(); return; }
+  if (_handleMenuTap()) return;
   if (state.mode==='playing') player.jump();
 });
 document.getElementById('btn-slide').addEventListener('pointerdown', e => {
   e.preventDefault(); ensureAudio();
-  if (state.mode==='title'||state.mode==='gameover') { musicStop(); state.reset(); state.mode='playing'; musicStart(); return; }
+  if (_handleMenuTap()) return;
   if (state.mode==='playing') player.slide();
 });
 document.getElementById('btn-arms').addEventListener('pointerdown', e => {
   e.preventDefault(); ensureAudio();
-  if (state.mode==='title'||state.mode==='gameover') { musicStop(); state.reset(); state.mode='playing'; musicStart(); return; }
+  if (_handleMenuTap()) return;
   if (state.mode==='playing') player.spread();
 });
 
@@ -1003,6 +1209,12 @@ function drawHUD() {
   ctx.strokeText(state.hiScore, W/2, HUD_H - 9);
   ctx.fillStyle = '#e2e8f0'; ctx.fillText(state.hiScore, W/2, HUD_H - 9);
 
+  // Player name — small label left of lives
+  if (playerName) {
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 10px Arial'; ctx.fillStyle = '#4ade80';
+    ctx.fillText(playerName, W - 88, HUD_H/2 + 4);
+  }
   for (let i = 0; i < 3; i++) drawMiniPepe(W - 20 - i * 26, HUD_H/2, i < state.lives);
   ctx.restore();
 }
@@ -1105,45 +1317,101 @@ function drawTitle() {
 
 function drawGameOver() {
   const ov = ctx.createLinearGradient(0, 0, 0, H);
-  ov.addColorStop(0, 'rgba(40,0,0,0.88)'); ov.addColorStop(1, 'rgba(0,0,0,0.82)');
+  ov.addColorStop(0, 'rgba(40,0,0,0.92)'); ov.addColorStop(1, 'rgba(0,0,0,0.88)');
   ctx.fillStyle = ov; ctx.fillRect(0, 0, W, H);
+  ctx.save();
+
+  // ── GAME OVER title ───────────────────────────────────────────────────────
   ctx.textAlign = 'center';
-
-  // ── GAME OVER — red glow ──────────────────────────────────────────────────
-  ctx.font = 'bold 56px Arial Black';
+  ctx.font = 'bold 52px Arial Black';
   ctx.strokeStyle = '#7f1d1d'; ctx.lineWidth = 7;
-  ctx.strokeText('GAME OVER', W/2, 150);
-  ctx.fillStyle = '#ef4444'; ctx.fillText('GAME OVER', W/2, 150);
+  ctx.strokeText('GAME OVER', W/2, 72);
+  ctx.fillStyle = '#ef4444'; ctx.fillText('GAME OVER', W/2, 72);
 
-  // ── Score box ─────────────────────────────────────────────────────────────
-  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(W/2-90, 162, 180, 48);
-  ctx.strokeStyle = 'rgba(253,224,71,0.3)'; ctx.lineWidth = 1;
-  ctx.strokeRect(W/2-90, 162, 180, 48);
-  ctx.font = '12px Arial'; ctx.fillStyle = 'rgba(253,224,71,0.6)';
-  ctx.fillText('YOUR SCORE', W/2, 178);
-  ctx.font = 'bold 30px Arial Black';
+  // ── Left column: player score ─────────────────────────────────────────────
+  const lCx = W / 4;  // centre of left column
+  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(14, 88, W/2 - 24, 118);
+  ctx.strokeStyle = 'rgba(253,224,71,0.2)'; ctx.lineWidth = 1;
+  ctx.strokeRect(14, 88, W/2 - 24, 118);
+
+  ctx.textAlign = 'center';
+  ctx.font = '11px Arial'; ctx.fillStyle = 'rgba(253,224,71,0.55)';
+  ctx.fillText(playerName ? playerName + "'S SCORE" : 'YOUR SCORE', lCx, 104);
+
+  ctx.font = 'bold 38px Arial Black';
   ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 2;
-  ctx.strokeText(state.score, W/2, 204);
-  ctx.fillStyle = '#fde047'; ctx.fillText(state.score, W/2, 204);
+  ctx.strokeText(state.score, lCx, 148);
+  ctx.fillStyle = '#fde047'; ctx.fillText(state.score, lCx, 148);
 
-  // ── Best / New best ───────────────────────────────────────────────────────
   if (state.score >= state.hiScore && state.score > 0) {
-    ctx.font = 'bold 22px Arial Black';
+    ctx.font = 'bold 15px Arial Black';
     ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 2;
-    ctx.strokeText('NEW BEST!', W/2, 242);
-    ctx.fillStyle = '#fb923c'; ctx.fillText('NEW BEST!', W/2, 242);
+    ctx.strokeText('★ NEW BEST!', lCx, 174);
+    ctx.fillStyle = '#fb923c'; ctx.fillText('★ NEW BEST!', lCx, 174);
   } else if (state.hiScore > 0) {
-    ctx.font = '14px Arial'; ctx.fillStyle = '#64748b';
-    ctx.fillText(`Best: ${state.hiScore}`, W/2, 240);
+    ctx.font = '12px Arial'; ctx.fillStyle = '#64748b';
+    ctx.fillText('Best: ' + state.hiScore, lCx, 174);
+  }
+
+  ctx.font = '10px Arial'; ctx.fillStyle = '#334155';
+  ctx.fillText('same player — no sign-in needed', lCx, 198);
+
+  // ── Right column: all-time leaderboard ───────────────────────────────────
+  const rX  = W / 2 + 10;
+  const rW  = W / 2 - 24;
+  const rCx = rX + rW / 2;
+  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(rX, 88, rW, 118);
+  ctx.strokeStyle = 'rgba(74,222,128,0.2)'; ctx.lineWidth = 1;
+  ctx.strokeRect(rX, 88, rW, 118);
+
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 10px Arial'; ctx.fillStyle = '#4ade80';
+  ctx.fillText('ALL-TIME TOP SCORES', rCx, 102);
+
+  const lb = state.leaderboardCache;
+  if (!lb.length) {
+    ctx.font = '11px Arial'; ctx.fillStyle = '#475569';
+    ctx.fillText('LOADING...', rCx, 150);
+  } else {
+    const show = lb.slice(0, 5);
+    const myKey = playerName.toUpperCase().trim();
+    show.forEach((e, i) => {
+      const ey = 118 + i * 19;
+      const isMe = myKey && e.name === myKey;
+      if (isMe) {
+        ctx.fillStyle = 'rgba(74,222,128,0.1)';
+        ctx.fillRect(rX + 2, ey - 13, rW - 4, 16);
+      }
+      ctx.textAlign = 'left';
+      ctx.font = '10px Arial'; ctx.fillStyle = '#475569';
+      ctx.fillText(i + 1, rX + 7, ey);
+      ctx.font = isMe ? 'bold 11px Arial' : '11px Arial';
+      ctx.fillStyle = isMe ? '#4ade80' : '#e2e8f0';
+      ctx.fillText(e.name, rX + 22, ey);
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillStyle = isMe ? '#4ade80' : '#fde047';
+      ctx.fillText(e.score, rX + rW - 7, ey);
+    });
+    // show rank if outside top 5
+    const myRank = lb.findIndex(e => myKey && e.name === myKey);
+    if (myRank >= 5) {
+      ctx.textAlign = 'center';
+      ctx.font = 'italic 10px Arial'; ctx.fillStyle = '#4ade80';
+      ctx.fillText('You: #' + (myRank + 1) + ' · ' + lb[myRank].score, rCx, 200);
+    }
   }
 
   // ── Play again ────────────────────────────────────────────────────────────
+  ctx.textAlign = 'center';
   ctx.globalAlpha = 0.65 + Math.sin(state.frame * 0.07) * 0.35;
-  ctx.font = 'bold 17px Arial Black';
+  ctx.font = 'bold 16px Arial Black';
   ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 2;
-  ctx.strokeText('TAP  ·  PRESS SPACE  ·  PLAY AGAIN', W/2, 330);
-  ctx.fillStyle = '#fff'; ctx.fillText('TAP  ·  PRESS SPACE  ·  PLAY AGAIN', W/2, 330);
+  const prompt = playerName ? 'PLAY AGAIN AS ' + playerName + '  ·  TAP / SPACE' : 'TAP  ·  PRESS SPACE  ·  PLAY AGAIN';
+  ctx.strokeText(prompt, W/2, 232);
+  ctx.fillStyle = '#fff'; ctx.fillText(prompt, W/2, 232);
   ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 // ─── COLLISIONS ──────────────────────────────────────────────────────────────
@@ -1217,7 +1485,7 @@ function update() {
   if (state.mode !== 'playing') return;
 
   state.speed = SCROLL_SPEED + Math.min(state.frame / 2000, 4);
-  if (state.frame % 60 === 0) state.score++;
+  if (state.frame % 60 === 0) { state.score++; state.checkMilestone(); }
 
   if (state.frame >= state.nextBall) {
     state.balls.push(new Football());
@@ -1268,6 +1536,13 @@ function draw() {
 }
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+// ─── NAME OVERLAY HANDLERS ───────────────────────────────────────────────────
+document.getElementById('name-btn').addEventListener('click', startGame);
+document.getElementById('name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); startGame(); }
+  e.stopPropagation(); // prevent game keys (Space, arrows) from firing while typing
+});
 
 pitch.init();
 loop();
