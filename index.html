@@ -168,6 +168,7 @@
   .lb-row.lb-me .lb-name  { color: #4ade80; }
   .lb-row.lb-me .lb-score { color: #4ade80; }
   #lb-loading { color: #475569; font-size: 11px; font-family: Arial, sans-serif; letter-spacing: 1px; }
+  .lb-plays { color: #475569; font-size: 10px; font-family: Arial, sans-serif; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -292,20 +293,30 @@ async function loadTopScores() {
   } catch(e) { console.warn('Leaderboard load failed:', e); return null; }
 }
 
+async function fetchTotalPlays() {
+  try {
+    const res = await fetch('https://play-pepe-default-rtdb.europe-west1.firebasedatabase.app/scores.json?shallow=true');
+    const data = await res.json();
+    return data ? Object.keys(data).length : 0;
+  } catch(e) { return 0; }
+}
+
 function refreshLeaderboard() {
-  loadTopScores().then(scores => {
+  Promise.all([loadTopScores(), fetchTotalPlays()]).then(([scores, total]) => {
     if (scores) state.leaderboardCache = scores;
-    renderLBInOverlay(scores);
+    state.totalPlays = total;
+    renderLBInOverlay(scores, total);
   });
 }
 
-function renderLBInOverlay(scores) {
+function renderLBInOverlay(scores, total) {
   const lbDiv = document.getElementById('name-lb');
   if (!lbDiv) return;
   if (scores === null) { lbDiv.innerHTML = '<span id="lb-loading">Failed to load scores</span>'; return; }
   if (!scores.length) { lbDiv.innerHTML = '<span id="lb-loading">No scores yet</span>'; return; }
   const myName = playerName.toUpperCase().trim();
-  lbDiv.innerHTML = '<h3>TOP SCORES</h3>' + scores.map((e, i) => {
+  const countLine = total ? `<div class="lb-plays">${total} games played</div>` : '';
+  lbDiv.innerHTML = '<h3>TOP SCORES</h3>' + countLine + scores.map((e, i) => {
     const isMe = myName && e.name === myName;
     return `<div class="lb-row${isMe ? ' lb-me' : ''}">
       <span class="lb-rank">${i + 1}</span>
@@ -1272,6 +1283,7 @@ const state = {
   balls: [], opponents: [], referees: [], injuredOpponents: [], particles: [], scoreTexts: [],
   speed: SCROLL_SPEED,
   leaderboardCache: [],
+  totalPlays: 0,
   lastMilestone: 0,
 
   checkMilestone() {
@@ -1583,7 +1595,11 @@ function drawGameOver() {
 
   ctx.textAlign = 'center';
   ctx.font = 'bold 10px Arial'; ctx.fillStyle = '#4ade80';
-  ctx.fillText('ALL-TIME TOP SCORES', rCx, 102);
+  ctx.fillText('ALL-TIME TOP SCORES', rCx, 100);
+  if (state.totalPlays > 0) {
+    ctx.font = '9px Arial'; ctx.fillStyle = '#64748b';
+    ctx.fillText(state.totalPlays + ' games played', rCx, 111);
+  }
 
   const lb = state.leaderboardCache;
   if (!lb || !lb.length) {
@@ -1593,7 +1609,7 @@ function drawGameOver() {
     const show = lb.slice(0, 10);
     const myKey = playerName.toUpperCase().trim();
     show.forEach((e, i) => {
-      const ey = 116 + i * 13;
+      const ey = 122 + i * 13;
       const isMe = myKey && e.name === myKey;
       if (isMe) {
         ctx.fillStyle = 'rgba(74,222,128,0.1)';
@@ -1791,7 +1807,7 @@ document.getElementById('name-input').addEventListener('keydown', e => {
 });
 
 pitch.init();
-loadTopScores().then(scores => { if (scores) state.leaderboardCache = scores; });
+refreshLeaderboard();
 loop();
 </script>
 </body>
