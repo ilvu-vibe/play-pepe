@@ -1566,9 +1566,9 @@ function drawGameOver() {
   const rX  = W / 2 + 10;
   const rW  = W / 2 - 24;
   const rCx = rX + rW / 2;
-  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(rX, 88, rW, 118);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(rX, 88, rW, 155);
   ctx.strokeStyle = 'rgba(74,222,128,0.2)'; ctx.lineWidth = 1;
-  ctx.strokeRect(rX, 88, rW, 118);
+  ctx.strokeRect(rX, 88, rW, 155);
 
   ctx.textAlign = 'center';
   ctx.font = 'bold 10px Arial'; ctx.fillStyle = '#4ade80';
@@ -1577,34 +1577,34 @@ function drawGameOver() {
   const lb = state.leaderboardCache;
   if (!lb || !lb.length) {
     ctx.font = '11px Arial'; ctx.fillStyle = '#475569';
-    ctx.fillText(lb === null ? 'UNAVAILABLE' : 'LOADING...', rCx, 150);
+    ctx.fillText(lb === null ? 'UNAVAILABLE' : 'LOADING...', rCx, 165);
   } else {
-    const show = lb.slice(0, 5);
+    const show = lb.slice(0, 10);
     const myKey = playerName.toUpperCase().trim();
     show.forEach((e, i) => {
-      const ey = 118 + i * 19;
+      const ey = 116 + i * 13;
       const isMe = myKey && e.name === myKey;
       if (isMe) {
         ctx.fillStyle = 'rgba(74,222,128,0.1)';
-        ctx.fillRect(rX + 2, ey - 13, rW - 4, 16);
+        ctx.fillRect(rX + 2, ey - 10, rW - 4, 13);
       }
       ctx.textAlign = 'left';
-      ctx.font = '10px Arial'; ctx.fillStyle = '#475569';
+      ctx.font = '9px Arial'; ctx.fillStyle = '#475569';
       ctx.fillText(i + 1, rX + 7, ey);
-      ctx.font = isMe ? 'bold 11px Arial' : '11px Arial';
+      ctx.font = isMe ? 'bold 10px Arial' : '10px Arial';
       ctx.fillStyle = isMe ? '#4ade80' : '#e2e8f0';
       ctx.fillText(e.name, rX + 22, ey);
       ctx.textAlign = 'right';
-      ctx.font = 'bold 11px Arial';
+      ctx.font = 'bold 10px Arial';
       ctx.fillStyle = isMe ? '#4ade80' : '#fde047';
       ctx.fillText(e.score, rX + rW - 7, ey);
     });
-    // show rank if outside top 5
+    // show rank if outside top 10
     const myRank = lb.findIndex(e => myKey && e.name === myKey);
-    if (myRank >= 5) {
+    if (myRank >= 10) {
       ctx.textAlign = 'center';
       ctx.font = 'italic 10px Arial'; ctx.fillStyle = '#4ade80';
-      ctx.fillText('You: #' + (myRank + 1) + ' · ' + lb[myRank].score, rCx, 200);
+      ctx.fillText('You: #' + (myRank + 1) + ' · ' + lb[myRank].score, rCx, 248);
     }
   }
 
@@ -1614,8 +1614,8 @@ function drawGameOver() {
   ctx.font = 'bold 16px Arial, sans-serif';
   ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 2;
   const prompt = playerName ? 'PLAY AGAIN AS ' + playerName + '  ·  TAP / SPACE' : 'TAP  ·  PRESS SPACE  ·  PLAY AGAIN';
-  ctx.strokeText(prompt, W/2, 232);
-  ctx.fillStyle = '#fff'; ctx.fillText(prompt, W/2, 232);
+  ctx.strokeText(prompt, W/2, 260);
+  ctx.fillStyle = '#fff'; ctx.fillText(prompt, W/2, 260);
   ctx.globalAlpha = 1;
   ctx.restore();
 }
