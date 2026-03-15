@@ -280,17 +280,28 @@ async function saveScore(name, score) {
   } catch(e) { console.warn('Score save failed:', e); }
 }
 
-async function loadTopScores(n = 10) {
+async function loadTopScores() {
   try {
-    const snap = await db.ref('scores').orderByChild('score').limitToLast(n).get();
+    const snap = await db.ref('scores').orderByChild('score').limitToLast(100).get();
     const entries = [];
-    snap.forEach(child => entries.push(child.val()));
-    return entries.sort((a, b) => b.score - a.score);
+    snap.forEach(child => {
+      const v = child.val();
+      if (v && typeof v.score === 'number' && v.score > 0 && v.name) entries.push(v);
+    });
+    return entries.sort((a, b) => b.score - a.score).slice(0, 10);
   } catch(e) { console.warn('Leaderboard load failed:', e); return null; }
+}
+
+function refreshLeaderboard() {
+  loadTopScores().then(scores => {
+    if (scores) state.leaderboardCache = scores;
+    renderLBInOverlay(scores);
+  });
 }
 
 function renderLBInOverlay(scores) {
   const lbDiv = document.getElementById('name-lb');
+  if (!lbDiv) return;
   if (scores === null) { lbDiv.innerHTML = '<span id="lb-loading">Failed to load scores</span>'; return; }
   if (!scores.length) { lbDiv.innerHTML = '<span id="lb-loading">No scores yet</span>'; return; }
   const myName = playerName.toUpperCase().trim();
@@ -311,7 +322,7 @@ function showNameOverlay() {
   input.value = playerName;
   input.focus(); input.select();
   document.getElementById('name-lb').innerHTML = '<span id="lb-loading">LOADING SCORES...</span>';
-  loadTopScores().then(renderLBInOverlay);
+  refreshLeaderboard();
 }
 
 function hideNameOverlay() {
@@ -1300,7 +1311,7 @@ const state = {
       musicStop(); sfxDie(); this.mode='gameover';
       saveScore(playerName, this.score);
       this.leaderboardCache = [];
-      loadTopScores().then(scores => { state.leaderboardCache = scores; });
+      refreshLeaderboard();
     }
     else { this.mode='dead'; setTimeout(() => { if(this.mode==='dead') this.mode='playing'; }, 800); }
   }
@@ -1780,6 +1791,7 @@ document.getElementById('name-input').addEventListener('keydown', e => {
 });
 
 pitch.init();
+loadTopScores().then(scores => { if (scores) state.leaderboardCache = scores; });
 loop();
 </script>
 </body>
