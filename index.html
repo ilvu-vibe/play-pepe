@@ -160,7 +160,7 @@
     <button class="ctrl-btn" id="btn-arms">CRY</button>
     <button class="ctrl-btn" id="btn-kick">KICK</button>
   </div>
-  <div id="kb-hint">SPACE/↑ Jump &nbsp;|&nbsp; ↓/S Slide &nbsp;|&nbsp; A Cry &nbsp;|&nbsp; D Kick</div>
+  <div id="kb-hint">SPACE/↑ Jump &nbsp;|&nbsp; ↓/S Slide &nbsp;|&nbsp; A Cry &nbsp;|&nbsp; D Kick &nbsp;|&nbsp; Swipe on canvas</div>
 </div>
 
 <div id="name-overlay">
@@ -1310,10 +1310,34 @@ function _handleMenuTap() {
   if (state.mode==='gameover') { playerName ? startGameDirectly() : showNameOverlay(); return true; }
   return false;
 }
+// ─── CANVAS SWIPE / TAP ──────────────────────────────────────────────────────
+// Swipe up   (or left  in portrait) → jump
+// Swipe down (or right in portrait) → slide
+// Swipe right (or down  in portrait) → kick
+// Swipe left  (or up    in portrait) → cry/spread
+// Tap anywhere                       → jump
+let _ptx = 0, _pty = 0;
 canvas.addEventListener('pointerdown', e => {
   e.preventDefault(); ensureAudio();
   if (_handleMenuTap()) return;
-  if (state.mode==='playing') player.jump();
+  _ptx = e.clientX; _pty = e.clientY;
+});
+canvas.addEventListener('pointerup', e => {
+  e.preventDefault();
+  if (state.mode !== 'playing') return;
+  const dx = e.clientX - _ptx, dy = e.clientY - _pty;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 18) { player.jump(); return; }          // tap → jump
+  const portrait = window.innerHeight > window.innerWidth;
+  // In portrait the game-wrap is rotated -90 deg (CSS).
+  // Screen→game mapping: game_x = -screen_y,  game_y = screen_x
+  const gx = portrait ? -dy :  dx;   // positive = game-right
+  const gy = portrait ?  dx :  dy;   // positive = game-down
+  if (Math.abs(gy) >= Math.abs(gx)) {
+    gy < 0 ? player.jump() : player.slide();
+  } else {
+    gx > 0 ? player.kick() : player.spread();
+  }
 });
 document.getElementById('btn-jump').addEventListener('pointerdown', e => {
   e.preventDefault(); ensureAudio();
