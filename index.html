@@ -1529,9 +1529,9 @@ function drawGameOver() {
   ctx.fillText('ALL-TIME TOP SCORES', rCx, 102);
 
   const lb = state.leaderboardCache;
-  if (!lb.length) {
+  if (!lb || !lb.length) {
     ctx.font = '11px Arial'; ctx.fillStyle = '#475569';
-    ctx.fillText('LOADING...', rCx, 150);
+    ctx.fillText(lb === null ? 'UNAVAILABLE' : 'LOADING...', rCx, 150);
   } else {
     const show = lb.slice(0, 5);
     const myKey = playerName.toUpperCase().trim();
